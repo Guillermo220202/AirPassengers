@@ -1,0 +1,371 @@
+# Análisis de Serie Temporal: Dataset AirPassengers
+# Autor: [Tu Nombre]
+# Fecha: 18 de abril de 2025
+
+# Cargar los paquetes necesarios
+if (!require("tseries")) install.packages("tseries")
+if (!require("forecast")) install.packages("forecast")
+if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("dplyr")) install.packages("dplyr")
+if (!require("scales")) install.packages("scales")
+
+library(tseries)
+library(forecast)
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+# -----------------------------------------------------
+# 1. CARGA DEL DATASET
+# -----------------------------------------------------
+
+# Cargar el dataset AirPassengers incluido en R
+data("AirPassengers")
+
+# Inspeccionar la estructura del dataset
+print("Clase del dataset:")
+print(class(AirPassengers))   # Verifica que es una serie temporal (ts)
+
+print("Resumen estadístico:")
+print(summary(AirPassengers)) # Resumen estadístico
+
+print("Información temporal de la serie:")
+print(paste("Inicio:", paste(start(AirPassengers), collapse="-")))   # Inicio de la serie
+print(paste("Fin:", paste(end(AirPassengers), collapse="-")))     # Fin de la serie
+print(paste("Frecuencia:", frequency(AirPassengers))) # Frecuencia: 12 (mensual)
+print(paste("Número de observaciones:", length(AirPassengers)))
+
+# -----------------------------------------------------
+# 2. EXPLORACIÓN INICIAL
+# -----------------------------------------------------
+
+# Visualizar la serie temporal
+par(mfrow=c(1,1))
+plot(AirPassengers, 
+     main="Número de Pasajeros Aéreos Internacionales (1949-1960)",
+     xlab="Año",
+     ylab="Número de Pasajeros (miles)",
+     col="blue")
+grid()
+
+# Convertir a dataframe para algunas visualizaciones
+ap_df <- data.frame(
+  fecha = as.Date(time(AirPassengers), format="%Y-%m-%d"),
+  pasajeros = as.numeric(AirPassengers)
+)
+
+# Calcular estadísticas descriptivas básicas
+print("Estadísticas descriptivas básicas:")
+media <- mean(AirPassengers)
+print(paste("Media:", round(media, 2)))
+desv_est <- sd(AirPassengers)
+print(paste("Desviación estándar:", round(desv_est, 2)))
+coef_var <- desv_est / media * 100
+print(paste("Coeficiente de variación:", round(coef_var, 2), "%"))
+minimo <- min(AirPassengers)
+print(paste("Mínimo:", minimo))
+maximo <- max(AirPassengers)
+print(paste("Máximo:", maximo))
+rango <- maximo - minimo
+print(paste("Rango:", rango))
+
+# Visualizar la distribución de los datos
+hist(AirPassengers, 
+     breaks=20, 
+     main="Distribución del Número de Pasajeros",
+     xlab="Número de Pasajeros (miles)",
+     col="lightblue",
+     border="white")
+
+# -----------------------------------------------------
+# 3. ANÁLISIS DE TENDENCIA Y ESTACIONALIDAD
+# -----------------------------------------------------
+
+# Descomponer la serie temporal
+descomposicion <- decompose(AirPassengers, type="multiplicative")
+
+# Visualizar los componentes por separado
+plot(descomposicion, col="blue")
+
+# Extraer componentes individualmente
+tendencia <- descomposicion$trend
+estacionalidad <- descomposicion$seasonal
+residuos <- descomposicion$random
+
+# Visualizar solo la tendencia
+plot(tendencia, 
+     main="Componente de Tendencia",
+     xlab="Año",
+     ylab="Tendencia",
+     col="red")
+grid()
+
+# Visualizar solo el componente estacional
+plot(estacionalidad, 
+     main="Componente Estacional",
+     xlab="Año",
+     ylab="Factor Estacional",
+     col="green")
+grid()
+
+# Analizar el patrón mensual promedio
+estacionalidad_media <- tapply(estacionalidad, cycle(estacionalidad), mean, na.rm=TRUE)
+meses <- c("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+
+barplot(estacionalidad_media, 
+        names.arg=meses,
+        main="Patrón Estacional Mensual",
+        xlab="Mes",
+        ylab="Factor Estacional",
+        col="lightgreen",
+        border="white")
+abline(h=1, col="red", lty=2)
+
+# Visualizar solo el componente residual
+plot(residuos, 
+     main="Componente Residual",
+     xlab="Año",
+     ylab="Residuos",
+     col="purple")
+grid()
+abline(h=1, col="red", lty=2)
+
+# -----------------------------------------------------
+# 4. ANÁLISIS DE ESTACIONARIEDAD
+# -----------------------------------------------------
+
+# Gráficos de autocorrelación (ACF) y autocorrelación parcial (PACF)
+par(mfrow=c(1,2))
+acf(AirPassengers, main="Función de Autocorrelación (ACF)")
+pacf(AirPassengers, main="Función de Autocorrelación Parcial (PACF)")
+
+# Prueba de Dickey-Fuller aumentada para verificar estacionariedad
+print("Prueba de Dickey-Fuller en la serie original:")
+adf_test <- adf.test(AirPassengers)
+print(adf_test)
+
+# Interpretar resultado de la prueba ADF
+if (adf_test$p.value < 0.05) {
+  print("La serie es estacionaria (rechazamos la hipótesis nula)")
+} else {
+  print("La serie NO es estacionaria (no podemos rechazar la hipótesis nula)")
+}
+
+# Transformar la serie mediante diferenciación
+# Primera diferenciación (diferencia entre meses consecutivos)
+ap_diff1 <- diff(AirPassengers, differences=1)
+
+# Graficar la serie diferenciada
+par(mfrow=c(1,1))
+plot(ap_diff1, 
+     main="Serie Diferenciada (1ª Diferencia)",
+     xlab="Año",
+     ylab="Diferencia en Número de Pasajeros",
+     col="blue")
+grid()
+abline(h=0, col="red", lty=2)
+
+# Verificar estacionariedad en la serie diferenciada
+print("Prueba de Dickey-Fuller en la serie diferenciada:")
+adf_test_diff <- adf.test(ap_diff1)
+print(adf_test_diff)
+
+# Interpretar resultado de la prueba ADF en la serie diferenciada
+if (adf_test_diff$p.value < 0.05) {
+  print("La serie diferenciada es estacionaria (rechazamos la hipótesis nula)")
+} else {
+  print("La serie diferenciada NO es estacionaria (no podemos rechazar la hipótesis nula)")
+}
+
+# ACF y PACF de la serie diferenciada
+par(mfrow=c(1,2))
+acf(ap_diff1, main="ACF - Serie Diferenciada")
+pacf(ap_diff1, main="PACF - Serie Diferenciada")
+
+# Transformación logarítmica seguida de diferenciación (para estabilizar la varianza)
+ap_log <- log(AirPassengers)
+ap_log_diff1 <- diff(ap_log, differences=1)
+
+# Graficar la serie transformada
+par(mfrow=c(1,1))
+plot(ap_log_diff1, 
+     main="Serie Transformada (Log + 1ª Diferencia)",
+     xlab="Año",
+     ylab="Diferencia en Log(Pasajeros)",
+     col="blue")
+grid()
+abline(h=0, col="red", lty=2)
+
+# Verificar estacionariedad en la serie transformada
+print("Prueba de Dickey-Fuller en la serie transformada (log + diferencia):")
+adf_test_log_diff <- adf.test(ap_log_diff1)
+print(adf_test_log_diff)
+
+# Interpretar resultado de la prueba ADF en la serie transformada
+if (adf_test_log_diff$p.value < 0.05) {
+  print("La serie transformada es estacionaria (rechazamos la hipótesis nula)")
+} else {
+  print("La serie transformada NO es estacionaria (no podemos rechazar la hipótesis nula)")
+}
+
+# ACF y PACF de la serie transformada
+par(mfrow=c(1,2))
+acf(ap_log_diff1, main="ACF - Serie Transformada")
+pacf(ap_log_diff1, main="PACF - Serie Transformada")
+
+# -----------------------------------------------------
+# 5. DETECCIÓN DE VALORES ATÍPICOS
+# -----------------------------------------------------
+
+# Visualizar la serie temporal con boxplot para detectar outliers
+par(mfrow=c(1,1))
+boxplot(AirPassengers ~ cycle(AirPassengers), 
+        main="Distribución Mensual de Pasajeros",
+        xlab="Mes",
+        ylab="Número de Pasajeros (miles)",
+        col="lightblue",
+        names=meses)
+grid()
+
+# Convertir a dataframe para facilitar la manipulación
+ap_ts_df <- data.frame(
+  fecha = as.Date(time(AirPassengers)),
+  mes = factor(cycle(AirPassengers), levels=1:12, labels=meses),
+  anio = as.numeric(floor(time(AirPassengers))),
+  pasajeros = as.numeric(AirPassengers)
+)
+
+# Detectar valores atípicos utilizando el método IQR
+ap_ts_df <- ap_ts_df %>%
+  group_by(mes) %>%
+  mutate(
+    q1 = quantile(pasajeros, 0.25),
+    q3 = quantile(pasajeros, 0.75),
+    iqr = q3 - q1,
+    limite_inferior = q1 - 1.5 * iqr,
+    limite_superior = q3 + 1.5 * iqr,
+    es_outlier = pasajeros < limite_inferior | pasajeros > limite_superior
+  )
+
+# Contar valores atípicos
+n_outliers <- sum(ap_ts_df$es_outlier)
+print(paste("Número de valores atípicos detectados:", n_outliers))
+
+# Visualizar los valores atípicos
+outliers <- ap_ts_df[ap_ts_df$es_outlier, ]
+if (nrow(outliers) > 0) {
+  print("Valores atípicos detectados:")
+  print(outliers[, c("fecha", "mes", "anio", "pasajeros")])
+}
+
+# Graficar la serie temporal destacando los valores atípicos
+ggplot(ap_ts_df, aes(x=fecha, y=pasajeros)) +
+  geom_line(color="blue") +
+  geom_point(data=subset(ap_ts_df, es_outlier), aes(x=fecha, y=pasajeros), 
+             color="red", size=3) +
+  labs(title="Serie Temporal con Valores Atípicos Destacados",
+       x="Año",
+       y="Número de Pasajeros (miles)") +
+  theme_minimal() +
+  scale_x_date(labels = date_format("%Y"), breaks = date_breaks("1 year"))
+
+# Visualizar los valores atípicos por mes y año
+ggplot(ap_ts_df, aes(x=mes, y=pasajeros, fill=mes)) +
+  geom_boxplot() +
+  geom_point(data=subset(ap_ts_df, es_outlier), aes(x=mes, y=pasajeros), 
+             color="red", size=3) +
+  labs(title="Distribución de Pasajeros por Mes con Valores Atípicos",
+       x="Mes",
+       y="Número de Pasajeros (miles)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Graficar la serie temporal con valores atípicos contextualizados en la descomposición
+par(mfrow=c(1,1))
+# Convertir los residuos a dataframe
+residuos_df <- data.frame(
+  fecha = as.Date(time(residuos)[!is.na(residuos)]),  # Excluir valores NA
+  residuo = as.numeric(residuos[!is.na(residuos)])    # Excluir valores NA
+)
+
+# Calcular límites para residuos atípicos
+media_residuos <- mean(residuos_df$residuo, na.rm=TRUE)
+sd_residuos <- sd(residuos_df$residuo, na.rm=TRUE)
+limite_sup_residuos <- media_residuos + 2 * sd_residuos
+limite_inf_residuos <- media_residuos - 2 * sd_residuos
+
+residuos_df$es_outlier <- residuos_df$residuo < limite_inf_residuos | 
+                          residuos_df$residuo > limite_sup_residuos
+
+# Graficar residuos destacando valores atípicos
+ggplot(residuos_df, aes(x=fecha, y=residuo)) +
+  geom_line(color="purple") +
+  geom_point(data=subset(residuos_df, es_outlier), aes(x=fecha, y=residuo), 
+             color="red", size=3) +
+  geom_hline(yintercept=limite_sup_residuos, linetype="dashed", color="red") +
+  geom_hline(yintercept=limite_inf_residuos, linetype="dashed", color="red") +
+  labs(title="Componente Residual con Valores Atípicos Destacados",
+       x="Año",
+       y="Residuo") +
+  theme_minimal() +
+  scale_x_date(labels = date_format("%Y"), breaks = date_breaks("1 year"))
+
+# -----------------------------------------------------
+# 6. INTERPRETACIÓN DE RESULTADOS
+# -----------------------------------------------------
+
+cat("\n=== RESUMEN DE ANÁLISIS DE LA SERIE TEMPORAL ===\n\n")
+
+cat("1. CARACTERÍSTICAS GENERALES\n")
+cat("- La serie temporal AirPassengers abarca desde", paste(start(AirPassengers), collapse="/"), 
+    "hasta", paste(end(AirPassengers), collapse="/"), "\n")
+cat("- Contiene", length(AirPassengers), "observaciones mensuales\n")
+cat("- La media de pasajeros es de", round(media, 2), "miles, con una desviación estándar de", 
+    round(desv_est, 2), "miles\n")
+cat("- El valor mínimo es", minimo, "miles (probablemente en los primeros años)\n")
+cat("- El valor máximo es", maximo, "miles (probablemente en los últimos años)\n\n")
+
+cat("2. ANÁLISIS DE TENDENCIA\n")
+cat("- La serie muestra una clara tendencia creciente a lo largo del tiempo\n")
+cat("- El crecimiento parece ser exponencial más que lineal, sugiriendo un aumento porcentual constante\n")
+cat("- No hay evidencia de cambios estructurales o puntos de inflexión en la tendencia general\n\n")
+
+cat("3. ANÁLISIS DE ESTACIONALIDAD\n")
+cat("- Se observa un fuerte patrón estacional\n")
+cat("- Los meses de verano (especialmente julio y agosto) muestran picos consistentes\n")
+cat("- Los meses de invierno (especialmente enero y febrero) muestran valles consistentes\n")
+cat("- La amplitud del patrón estacional parece aumentar con el tiempo, sugiriendo un modelo multiplicativo\n\n")
+
+cat("4. ANÁLISIS DE ESTACIONARIEDAD\n")
+cat("- La serie original no es estacionaria debido a la tendencia creciente y la estacionalidad\n")
+cat("- Prueba ADF para la serie original: p-valor =", round(adf_test$p.value, 4), 
+    ifelse(adf_test$p.value < 0.05, "(estacionaria)", "(no estacionaria)"), "\n")
+cat("- Después de aplicar la primera diferencia, la serie se vuelve", 
+    ifelse(adf_test_diff$p.value < 0.05, "estacionaria", "más estacionaria pero aún no completamente"), "\n")
+cat("- Prueba ADF para la serie diferenciada: p-valor =", round(adf_test_diff$p.value, 4), 
+    ifelse(adf_test_diff$p.value < 0.05, "(estacionaria)", "(no estacionaria)"), "\n")
+cat("- La transformación logarítmica seguida de diferenciación produce una serie", 
+    ifelse(adf_test_log_diff$p.value < 0.05, "estacionaria", "no estacionaria"), "\n")
+cat("- Prueba ADF para la serie transformada: p-valor =", round(adf_test_log_diff$p.value, 4), 
+    ifelse(adf_test_log_diff$p.value < 0.05, "(estacionaria)", "(no estacionaria)"), "\n\n")
+
+cat("5. ANÁLISIS DE VALORES ATÍPICOS\n")
+cat("- Se detectaron", n_outliers, "valores atípicos en la serie temporal\n")
+if (n_outliers > 0) {
+  cat("- Estos valores atípicos podrían representar eventos especiales o errores de medición\n")
+  cat("- La mayoría de los outliers aparecen en meses de", 
+      paste(as.character(outliers$mes), collapse=", "), "\n")
+} else {
+  cat("- No se detectaron valores atípicos significativos usando el método IQR\n")
+}
+cat("- En el análisis de residuos, se identificaron", sum(residuos_df$es_outlier), 
+    "observaciones con residuos inusualmente altos o bajos\n\n")
+
+cat("6. IMPLICACIONES Y RECOMENDACIONES\n")
+cat("- El crecimiento constante sugiere un aumento sostenido en la demanda de viajes aéreos internacionales\n")
+cat("- El fuerte patrón estacional indica la necesidad de capacidad variable durante el año\n")
+cat("- Para pronósticos, se recomienda usar modelos que puedan manejar estacionalidad multiplicativa como SARIMA\n")
+cat("- Es importante considerar la transformación logarítmica para estabilizar la varianza creciente\n")
+cat("- Cualquier algoritmo de predicción debería usar diferenciación o transformaciones para lograr estacionariedad\n\n")
+
+cat("=== FIN DEL ANÁLISIS ===\n")
